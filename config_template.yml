@@ -1,0 +1,5 @@
+base: "https://api.starlingbank.com"
+
+cps:
+  INCOME: "Income:??"
+  GROCERIES: "Expenses:??"

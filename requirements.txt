@@ -1,0 +1,4 @@
+typer
+httpx
+attrs
+pyyaml
