@@ -122,7 +122,7 @@ class Account:
                 print(f"  {cp}\n")
             except KeyError as e:
                 print(f"KeyError on {e}", sys.stderr)
-                pprint(it, stream=sys.sdterr)
+                pprint(it, stream=sys.stderr)
 
 
 def main(
