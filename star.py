@@ -18,9 +18,9 @@ def log(it):
     print()
 
 
-def parse_accs(accs):
+def parse_accs(accs, config):
     if accs == "all":
-        return [p.stem for p in Path(".").glob("*.token")]
+        return list(config.accs.keys())
     elif "," in accs:
         return accs.split(",")
     else:
@@ -31,6 +31,7 @@ def parse_accs(accs):
 class Config:
     base: str
     cps: dict
+    accs: dict
 
     def __init__(self, path=None):
         if not path:
@@ -39,32 +40,31 @@ class Config:
             config = yaml.safe_load(f)
         self.base = config["base"]
         self.cps = config["cps"]
+        self.accs = config["accs"]
 
 
 @define
 class Account:
     acc: str
+    conf: Config
     uid: str = attr.ib(init=False)
-    conf: Config = attr.ib(init=False)
 
     def __attrs_post_init__(self):
-        self.conf = Config()
         self.uid = self.get_uid()
 
     def get_uid(self):
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
-        return data["accounts"][0]["accountUid"]
+        uid = data["accounts"][0]["accountUid"]
+        return uid
 
     def get_cp(self, it):
         return self.conf.cps[it["spendingCategory"]]
 
     @property
     def token(self):
-        path = Path(__file__).parents[0] / f"{self.acc}.token"
-        with open(path) as f:
-            return f.read().strip()
+        return self.conf.accs[self.acc]
 
     @property
     def headers(self):
@@ -132,9 +132,12 @@ def main(
     balance: bool = False,
     verbose: bool = False,
 ):
-    accs = parse_accs(accs)
+
+    conf = Config()
+
+    accs = parse_accs(accs, conf)
     for acc in accs:
-        account = Account(acc)
+        account = Account(acc, conf)
         if balance:
             account.print_balance(verbose=verbose)
         else:
