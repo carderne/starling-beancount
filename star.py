@@ -133,6 +133,9 @@ def main(
     verbose: bool = False,
 ):
 
+    if not to:
+        to = datetime.date.today().isoformat()
+
     conf = Config()
 
     accs = parse_accs(accs, conf)
