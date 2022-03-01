@@ -7,34 +7,37 @@
 Use a [Starling Developer](https://developer.starlingbank.com/get-started) account to programatically export your bank transactions to [beancount](https://beancount.github.io/) files.
 
 ## Usage
-Get a [Starling Personal Access Token](https://developer.starlingbank.com/get-started) with the scopes `account:read`, `balance:read`, and `transaction:read` and save the token text in a file called eg `myaccount.token` (it can be whatever you want, but must have the extension `.token`).
+Get a [Starling Personal Access Token](https://developer.starlingbank.com/personal/token) with the following scopes:
+```
+account:read
+balance:read
+transaction:read
+```
+
+Save the provided token text in a file under the directory `tokens/`, eg `tokens/personal`.
 
 Clone and install requirements:
 ```
 git clone https://github.com/carderne/starling-beancount.git
 cd starling-beancount
-pip install -r requirements.txt
+pip install -e .
 ```
 
-Rename and update the config file:
-```
-mv config_template.yml config.yml
-
-# edit it with counterparties if needed!
-```
+Then edit the `config.yml` to suit your categories.
 
 Then run the script:
 ```
-Usage: star.py [OPTIONS] ACC FR TO
+Usage: star.py [OPTIONS] ACCS
 
 Arguments:
-  ACC  [required]
-  FR   [required]
-  TO   [required]
+  ACCS  [required]
 
 Options:
-  --balance / --no-balance        [default: no-bal]
+  --fr TEXT
+  --to TEXT
+  --balance / --no-balance        [default: no-balance]
   --verbose / --no-verbose        [default: no-verbose]
+  --help                          Show this message and exit.
 ```
 
 Example get the transactions from `myaccount` (or whatever you called your `.token` file) for a certain date range:

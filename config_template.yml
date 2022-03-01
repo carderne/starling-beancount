@@ -1,9 +1,0 @@
-base: "https://api.starlingbank.com"
-
-accs:
-  personal: <token-here>
-  joint: <token-here>
-
-cps:
-  INCOME: "Income:??"
-  GROCERIES: "Expenses:??"

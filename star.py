@@ -10,17 +10,25 @@ import attr
 from attr import define
 import typer
 import yaml
+from beancount.core import data, flags, amount
+from decimal import Decimal
+
+tokens = Path(__file__).parent.resolve() / "tokens"
+
+
+def echo(it):
+    pprint(it, stream=sys.stderr)
 
 
 def log(it):
     print("\n\n\n")
-    pprint(it, stream=sys.stderr)
+    echo(it)
     print()
 
 
-def parse_accs(accs, config):
+def parse_accs(accs):
     if accs == "all":
-        return list(config.accs.keys())
+        return [p.stem for p in sorted(tokens.glob("*")) if ".gitkeep" not in p.stem]
     elif "," in accs:
         return accs.split(",")
     else:
@@ -40,12 +48,13 @@ class Config:
             config = yaml.safe_load(f)
         self.base = config["base"]
         self.cps = config["cps"]
-        self.accs = config["accs"]
+        self.accs = {p.stem: open(p).read().strip() for p in tokens.glob("*")}
 
 
 @define
 class Account:
     acc: str
+    full_account: str
     conf: Config
     uid: str = attr.ib(init=False)
 
@@ -56,15 +65,26 @@ class Account:
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
-        uid = data["accounts"][0]["accountUid"]
+        try:
+            uid = data["accounts"][0]["accountUid"]
+        except KeyError:
+            echo(data, stream=sys.stderr)
+            sys.exit()
         return uid
 
     def get_cp(self, it):
-        return self.conf.cps[it["spendingCategory"]]
+        try:
+            return self.conf.cps[it["spendingCategory"]]
+        except KeyError:
+            return self.conf.cps["DEFAULT"]
 
     @property
     def token(self):
-        return self.conf.accs[self.acc]
+        try:
+            return self.conf.accs[self.acc]
+        except KeyError:
+            echo("Token not found, make sure it exists under tokens/")
+            sys.exit()
 
     @property
     def headers(self):
@@ -84,9 +104,9 @@ class Account:
                 "totalEffectiveBalance",
             ]
             for k in keys:
-                print(f"{k:<23}: {data[k]['minorUnits']/100}", f=sys.stderr)
+                print(f"{k:<23}: {data[k]['minorUnits']/100}", file=sys.stderr)
         date = datetime.date.today().isoformat()
-        acct = f"Assets:Starling:{self.acc.capitalize()}"
+        acct = self.full_account
         bal = data["totalEffectiveBalance"]["minorUnits"] / 100
         print(f"{date} balance {acct} {bal} GBP")
 
@@ -104,19 +124,45 @@ class Account:
         data = r.json()
         return data
 
+    def extract_info(self, it):
+        date = it["transactionTime"][:10]
+        payee = it.get("counterPartyName", "FIXME")
+        ref = " ".join(it["reference"].split())
+        acct = self.full_account
+        cp = self.get_cp(it)
+        amt = Decimal(it["amount"]["minorUnits"]) / 100
+        amt = amt if it["direction"] == "IN" else -amt
+        return date, payee, ref, acct, cp, amt
+
+    def convert(self, fr, to):
+        tr = self.get_transactions(fr, to)
+        txns = []
+        for i, it in enumerate(tr["feedItems"]):
+            date, payee, ref, acct, cp, amt = self.extract_info(it)
+
+            meta = data.new_metadata("starling-api", i)
+            p1 = data.Posting(acct, amount.Amount(amt, "GBP"), None, None, None, None)
+            p2 = data.Posting(cp, None, None, None, None, None)
+            txn = data.Transaction(
+                meta=meta,
+                date=datetime.date.fromisoformat(date),
+                flag=flags.FLAG_OKAY,
+                payee=payee,
+                narration=ref,
+                tags=set(),
+                links=set(),
+                postings=[p1, p2],
+            )
+            txns.append(txn)
+        return txns
+
     def print_transactions(self, fr, to, verbose=False):
         tr = self.get_transactions(fr, to)
         for it in tr["feedItems"]:
             if verbose:
                 log(it)
             try:
-                date = it["transactionTime"][:10]
-                payee = it.get("counterPartyName", "???")
-                ref = " ".join(it["reference"].split())
-                acct = f"Assets:Starling:{self.acc.capitalize()}"
-                cp = self.get_cp(it)
-                amt = it["amount"]["minorUnits"] / 100
-                amt = amt if it["direction"] == "IN" else -amt
+                date, payee, ref, acct, cp, amt = self.extract_info(it)
                 print(f'{date} * "{payee}" "{ref}"')
                 print(f"  {acct} {amt} GBP")
                 print(f"  {cp}\n")
@@ -125,22 +171,34 @@ class Account:
                 pprint(it, stream=sys.stderr)
 
 
+def convert(acc: str, full_account: str, fr: str, to: str) -> list:
+    if not to:
+        to = datetime.date.today().isoformat()
+
+    conf = Config()
+    account = Account(acc, full_account, conf)
+    return account.convert(fr, to)
+
+
 def main(
     accs: str,
-    fr: str = typer.Option(None),
-    to: str = typer.Option(None),
+    fr: str = None,
+    to: str = None,
     balance: bool = False,
     verbose: bool = False,
 ):
+    if not fr and not balance:
+        print("Need to provide a from date for transactions")
+        return
 
     if not to:
         to = datetime.date.today().isoformat()
 
     conf = Config()
 
-    accs = parse_accs(accs, conf)
+    accs = parse_accs(accs)
     for acc in accs:
-        account = Account(acc, conf)
+        account = Account(acc, f"Assets:Starling:{acc}", conf)
         if balance:
             account.print_balance(verbose=verbose)
         else:
