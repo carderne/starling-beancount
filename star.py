@@ -40,8 +40,9 @@ class Config:
     base: str
     cps: dict
     accs: dict
+    users: dict
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, user_path=None):
         if not path:
             path = Path(__file__).parents[0] / "config.yml"
         with open(path) as f:
@@ -49,6 +50,7 @@ class Config:
         self.base = config["base"]
         self.cps = config["cps"]
         self.accs = {p.stem: open(p).read().strip() for p in tokens.glob("*")}
+        self.users = config["userIds"]
 
 
 @define
@@ -147,15 +149,19 @@ class Account:
         cp = self.get_cp(it)
         amt = Decimal(it["amount"]["minorUnits"]) / 100
         amt = amt if it["direction"] == "IN" else -amt
-        return date, payee, ref, acct, cp, amt
+        user = it.get("transactingApplicationUserUid", None)
+        if user and self.acc == "joint":
+            user = self.conf.users[user]
+        return date, payee, ref, acct, cp, amt, user
 
     def transactions(self, fr, to):
         tr = self.get_transaction_data(fr, to)
         txns = []
         for i, it in enumerate(tr["feedItems"]):
-            date, payee, ref, acct, cp, amt = self.extract_info(it)
+            date, payee, ref, acct, cp, amt, user = self.extract_info(it)
 
-            meta = data.new_metadata("starling-api", i)
+            extra_meta = {"user": user} if user else None
+            meta = data.new_metadata("starling-api", i, extra_meta)
             p1 = data.Posting(acct, amount.Amount(amt, "GBP"), None, None, None, None)
             p2 = data.Posting(cp, None, None, None, None, None)
             txn = data.Transaction(

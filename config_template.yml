@@ -1,0 +1,10 @@
+base: "https://api.starlingbank.com"
+
+userIds:
+  12345678-abcd-9876-efgh-123456789abc: YourName
+
+cps:
+  DEFAULT:                "Expenses:FIXME"
+  GROCERIES:              "Expenses:Groceries"
+  LIFESTYLE:              "Expenses:Health"
+  INCOME:                 "Income:Job"
