@@ -56,6 +56,7 @@ class Account:
     acc: str
     full_account: str
     conf: Config
+    verbose: bool = False
     uid: str = attr.ib(init=False)
 
     def __attrs_post_init__(self):
@@ -70,7 +71,8 @@ class Account:
         except KeyError:
             echo(data)
             sys.exit()
-        log(uid)
+        if self.verbose:
+            log(uid)
         return uid
 
     def get_cp(self, it):
@@ -91,11 +93,11 @@ class Account:
     def headers(self):
         return {"Authorization": f"Bearer {self.token}"}
 
-    def get_balance_data(self, verbose=False):
+    def get_balance_data(self):
         url = f"/api/v2/accounts/{self.uid}/balance"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
-        if verbose:
+        if self.verbose:
             keys = [
                 "clearedBalance",
                 "effectiveBalance",
@@ -117,8 +119,8 @@ class Account:
         balance = data.Balance(meta, datetime.date.today(), acct, amt, None, None)
         return balance
 
-    def print_balance(self, verbose=False):
-        bal = self.get_balance_data(verbose=verbose)
+    def print_balance(self):
+        bal = self.get_balance_data()
         date = datetime.date.today().isoformat()
         acct = self.full_account
         print(f"{date} balance {acct} {bal} GBP")
@@ -169,10 +171,10 @@ class Account:
             txns.append(txn)
         return txns
 
-    def print_transactions(self, fr, to, verbose=False):
+    def print_transactions(self, fr, to):
         tr = self.get_transaction_data(fr, to)
         for it in tr["feedItems"]:
-            if verbose:
+            if self.verbose:
                 log(it)
             try:
                 date, payee, ref, acct, cp, amt = self.extract_info(it)
@@ -214,12 +216,12 @@ def main(
 
     accs = parse_accs(accs)
     for acc in accs:
-        account = Account(acc, f"Assets:Starling:{acc}", conf)
+        account = Account(acc, f"Assets:Starling:{acc}", conf, verbose)
         if balance:
-            account.print_balance(verbose=verbose)
+            account.print_balance()
         else:
             print(f"* {acc} - {to}")
-            account.print_transactions(fr, to, verbose=verbose)
+            account.print_transactions(fr, to)
             print("\n\n\n")
 
 
