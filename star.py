@@ -68,8 +68,9 @@ class Account:
         try:
             uid = data["accounts"][0]["accountUid"]
         except KeyError:
-            echo(data, stream=sys.stderr)
+            echo(data)
             sys.exit()
+        log(uid)
         return uid
 
     def get_cp(self, it):
@@ -90,7 +91,7 @@ class Account:
     def headers(self):
         return {"Authorization": f"Bearer {self.token}"}
 
-    def print_balance(self, verbose=False):
+    def get_balance_data(self, verbose=False):
         url = f"/api/v2/accounts/{self.uid}/balance"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
@@ -105,12 +106,24 @@ class Account:
             ]
             for k in keys:
                 print(f"{k:<23}: {data[k]['minorUnits']/100}", file=sys.stderr)
+        bal = Decimal(data["totalEffectiveBalance"]["minorUnits"]) / 100
+        return bal
+
+    def balance(self):
+        bal = self.get_balance_data()
+        amt = amount.Amount(bal, "GBP")
+        meta = data.new_metadata("starling-api", 0)
+        acct = self.full_account
+        balance = data.Balance(meta, datetime.date.today(), acct, amt, None, None)
+        return balance
+
+    def print_balance(self, verbose=False):
+        bal = self.get_balance_data(verbose=verbose)
         date = datetime.date.today().isoformat()
         acct = self.full_account
-        bal = data["totalEffectiveBalance"]["minorUnits"] / 100
         print(f"{date} balance {acct} {bal} GBP")
 
-    def get_transactions(self, fr, to):
+    def get_transaction_data(self, fr, to):
         url = f"/api/v2/feed/account/{self.uid}/settled-transactions-between"
         params = {
             "minTransactionTimestamp": f"{fr}T00:00:00.000Z",
@@ -134,8 +147,8 @@ class Account:
         amt = amt if it["direction"] == "IN" else -amt
         return date, payee, ref, acct, cp, amt
 
-    def convert(self, fr, to):
-        tr = self.get_transactions(fr, to)
+    def transactions(self, fr, to):
+        tr = self.get_transaction_data(fr, to)
         txns = []
         for i, it in enumerate(tr["feedItems"]):
             date, payee, ref, acct, cp, amt = self.extract_info(it)
@@ -157,7 +170,7 @@ class Account:
         return txns
 
     def print_transactions(self, fr, to, verbose=False):
-        tr = self.get_transactions(fr, to)
+        tr = self.get_transaction_data(fr, to)
         for it in tr["feedItems"]:
             if verbose:
                 log(it)
@@ -171,13 +184,16 @@ class Account:
                 pprint(it, stream=sys.stderr)
 
 
-def convert(acc: str, full_account: str, fr: str, to: str) -> list:
+def extract(acc: str, full_account: str, fr: str, to: str) -> list:
     if not to:
         to = datetime.date.today().isoformat()
 
     conf = Config()
     account = Account(acc, full_account, conf)
-    return account.convert(fr, to)
+    transactions = account.transactions(fr, to)
+    balance = account.balance()
+
+    return transactions + [balance]
 
 
 def main(
