@@ -118,7 +118,14 @@ class Account:
         amt = amount.Amount(bal, "GBP")
         meta = data.new_metadata("starling-api", 0)
         acct = self.full_account
-        balance = data.Balance(meta, datetime.date.today(), acct, amt, None, None)
+        balance = data.Balance(
+            meta,
+            datetime.date.today() + datetime.timedelta(days=1),
+            acct,
+            amt,
+            None,
+            None,
+        )
         return balance
 
     def print_balance(self):
@@ -128,36 +135,71 @@ class Account:
         print(f"{date} balance {acct} {bal} GBP")
 
     def get_transaction_data(self, fr, to):
-        url = f"/api/v2/feed/account/{self.uid}/settled-transactions-between"
-        params = {
-            "minTransactionTimestamp": f"{fr}T00:00:00.000Z",
-            "maxTransactionTimestamp": f"{to}T00:00:00.000Z",
-        }
-        r = httpx.get(
-            self.conf.base + url,
-            params=params,
-            headers=self.headers,
-        )
+        # first get all the category IDs
+
+        # get default category UID
+        url = "/api/v2/accounts"
+        r = httpx.get(self.conf.base + url, headers=self.headers)
+        default_category = r.json()["accounts"][0]["defaultCategory"]
+
+        # get spaces
+        url = f"/api/v2/account/{self.uid}/spaces"
+        r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
-        return data
+        try:
+            spaces_categories = [
+                sp["savingsGoalUid"] for sp in r.json()["savingsGoals"]
+            ]
+        except KeyError:
+            spaces_categories = []
+
+        if self.verbose:
+            log(default_category)
+            log(spaces_categories)
+
+        all_data = []
+        all_categories = spaces_categories + [default_category]
+        for category in all_categories:
+            url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
+            params = {
+                "minTransactionTimestamp": f"{fr}T00:00:00.000Z",
+                "maxTransactionTimestamp": f"{to}T00:00:00.000Z",
+            }
+            r = httpx.get(
+                self.conf.base + url,
+                params=params,
+                headers=self.headers,
+            )
+            data = r.json()
+            all_data.extend(data["feedItems"])
+        return all_data
 
     def extract_info(self, it):
-        date = it["transactionTime"][:10]
-        payee = it.get("counterPartyName", "FIXME")
-        ref = " ".join(it["reference"].split())
-        acct = self.full_account
-        cp = self.get_cp(it)
-        amt = Decimal(it["amount"]["minorUnits"]) / 100
-        amt = amt if it["direction"] == "IN" else -amt
-        user = it.get("transactingApplicationUserUid", None)
-        if user and self.acc == "joint":
-            user = self.conf.users[user]
+        try:
+            date = it["transactionTime"][:10]
+            payee = it.get("counterPartyName", "FIXME")
+            ref = " ".join(it["reference"].split())
+            acct = self.full_account
+            cp = self.get_cp(it)
+            amt = Decimal(it["amount"]["minorUnits"]) / 100
+            amt = amt if it["direction"] == "IN" else -amt
+            user = it.get("transactingApplicationUserUid", None)
+            if user and self.acc == "joint":
+                user = self.conf.users[user]
+            else:
+                # must add this to not get unwanted UIDs returned
+                user = None
+        except KeyError:
+            log(it)
+            sys.exit(1)
         return date, payee, ref, acct, cp, amt, user
 
     def transactions(self, fr, to):
         tr = self.get_transaction_data(fr, to)
         txns = []
-        for i, it in enumerate(tr["feedItems"]):
+        for i, it in enumerate(tr):
+            if it["source"] == "INTERNAL_TRANSFER" or it["status"] != "SETTLED":
+                continue
             date, payee, ref, acct, cp, amt, user = self.extract_info(it)
 
             extra_meta = {"user": user} if user else None
@@ -179,12 +221,16 @@ class Account:
 
     def print_transactions(self, fr, to):
         tr = self.get_transaction_data(fr, to)
-        for it in tr["feedItems"]:
+        for it in tr:
+            if it["source"] == "INTERNAL_TRANSFER" or it["status"] != "SETTLED":
+                continue
             if self.verbose:
                 log(it)
             try:
-                date, payee, ref, acct, cp, amt = self.extract_info(it)
+                date, payee, ref, acct, cp, amt, user = self.extract_info(it)
                 print(f'{date} * "{payee}" "{ref}"')
+                if user:
+                    print(f'  user: "{user}"')
                 print(f"  {acct} {amt} GBP")
                 print(f"  {cp}\n")
             except KeyError as e:
@@ -216,13 +262,13 @@ def main(
         return
 
     if not to:
-        to = datetime.date.today().isoformat()
+        to = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
 
     conf = Config()
 
     accs = parse_accs(accs)
     for acc in accs:
-        account = Account(acc, f"Assets:Starling:{acc}", conf, verbose)
+        account = Account(acc, f"Assets:Starling:{acc.capitalize()}", conf, verbose)
         if balance:
             account.print_balance()
         else:
