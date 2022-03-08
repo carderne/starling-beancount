@@ -11,18 +11,19 @@ from attr import define
 import typer
 import yaml
 from beancount.core import data, flags, amount
+from beancount.ingest.extract import print_extracted_entries
 from decimal import Decimal
 
 tokens = Path(__file__).parent.resolve() / "tokens"
 
 
 def echo(it):
-    pprint(it, stream=sys.stderr)
+    print(it, file=sys.stderr)
 
 
 def log(it):
     print("\n\n\n")
-    echo(it)
+    pprint(it, stream=sys.stderr)
     print()
 
 
@@ -73,10 +74,10 @@ class Account:
         try:
             uid = data["accounts"][0]["accountUid"]
         except KeyError:
-            echo(data)
+            log(data)
             sys.exit()
         if self.verbose:
-            log(uid)
+            log(f"{uid=}")
         return uid
 
     def get_cp(self, it):
@@ -111,11 +112,11 @@ class Account:
                 "totalEffectiveBalance",
             ]
             for k in keys:
-                print(f"{k:<23}: {data[k]['minorUnits']/100}", file=sys.stderr)
+                echo(f"{k:<23}: {data[k]['minorUnits']/100}")
         bal = Decimal(data["totalEffectiveBalance"]["minorUnits"]) / 100
         return bal
 
-    def balance(self):
+    def balance(self, display=False):
         bal = self.get_balance_data()
         amt = amount.Amount(bal, "GBP")
         meta = data.new_metadata("starling-api", 0)
@@ -128,13 +129,9 @@ class Account:
             None,
             None,
         )
+        if display:
+            print_extracted_entries([balance], file=sys.stdout)
         return balance
-
-    def print_balance(self):
-        bal = self.get_balance_data()
-        date = datetime.date.today().isoformat()
-        acct = self.full_account
-        print(f"{date} balance {acct} {bal} GBP")
 
     def get_transaction_data(self, fr, to):
         # first get all the category IDs
@@ -196,7 +193,7 @@ class Account:
             sys.exit(1)
         return date, payee, ref, acct, cp, amt, user
 
-    def transactions(self, fr, to):
+    def transactions(self, fr, to, display=False):
         tr = self.get_transaction_data(fr, to)
         txns = []
         for i, it in enumerate(tr):
@@ -219,25 +216,10 @@ class Account:
                 postings=[p1, p2],
             )
             txns.append(txn)
-        return txns
 
-    def print_transactions(self, fr, to):
-        tr = self.get_transaction_data(fr, to)
-        for it in tr:
-            if it["source"] == "INTERNAL_TRANSFER" or it["status"] != "SETTLED":
-                continue
-            if self.verbose:
-                log(it)
-            try:
-                date, payee, ref, acct, cp, amt, user = self.extract_info(it)
-                print(f'{date} * "{payee}" "{ref}"')
-                if user:
-                    print(f'  user: "{user}"')
-                print(f"  {acct} {amt} GBP")
-                print(f"  {cp}\n")
-            except KeyError as e:
-                print(f"KeyError on {e}", sys.stderr)
-                pprint(it, stream=sys.stderr)
+        if display:
+            print_extracted_entries(txns, sys.stdout)
+        return txns
 
 
 def extract(acc: str, full_account: str, fr: str, to: str) -> list:
@@ -248,7 +230,6 @@ def extract(acc: str, full_account: str, fr: str, to: str) -> list:
     account = Account(acc, full_account, conf)
     transactions = account.transactions(fr, to)
     balance = account.balance()
-
     return transactions + [balance]
 
 
@@ -260,7 +241,7 @@ def main(
     verbose: bool = False,
 ):
     if not fr and not balance:
-        print("Need to provide a from date for transactions")
+        echo("Need to provide a from date for transactions")
         return
 
     if not to:
@@ -272,10 +253,10 @@ def main(
     for acc in accs:
         account = Account(acc, f"Assets:Starling:{acc.capitalize()}", conf, verbose)
         if balance:
-            account.print_balance()
+            account.balance(display=True)
         else:
             print(f"* {acc} - {to}")
-            account.print_transactions(fr, to)
+            account.transactions(fr, to, display=True)
             print("\n\n\n")
 
 
