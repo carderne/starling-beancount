@@ -12,7 +12,7 @@ from attr import define
 import typer
 import yaml
 from beancount.core.amount import Amount
-from beancount.core.data import Transaction, Posting, Balance, new_metadata
+from beancount.core.data import Transaction, Posting, Balance, Note, new_metadata
 from beancount.core.flags import FLAG_OKAY
 from beancount.ingest.extract import print_extracted_entries
 from beancount.utils.date_utils import parse_date_liberally
@@ -21,7 +21,7 @@ from decimal import Decimal
 token_path = Path(__file__).parent.resolve() / "tokens"
 config_path = Path(__file__).parents[0] / "config.yml"
 
-VALID_STATUS = ["REVERSED", "SETTLED", "DECLINED", "REFUNDED", "ACCOUNT_CHECK"]
+VALID_STATUS = ["REVERSED", "SETTLED", "REFUNDED"]
 
 
 def echo(it):
@@ -100,25 +100,21 @@ class Account:
         data = r.json()
         if self.verbose:
             log(data)
-        bal = Decimal(data["totalEffectiveBalance"]["minorUnits"]) / 100
+        bal = Decimal(data["totalClearedBalance"]["minorUnits"]) / 100
         return bal
 
     def balances(self, display=False) -> list[Balance]:
         bal = self.get_balance_data()
         amt = Amount(bal, "GBP")
         meta = new_metadata("starling-api", 0)
-        acct = self.full_account
-        balance = Balance(
-            meta,
-            datetime.date.today() + datetime.timedelta(days=1),
-            acct,
-            amt,
-            None,
-            None,
-        )
+        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+
+        balance = Balance(meta, tomorrow, self.full_account, amt, None, None)
         if display:
             print_extracted_entries([balance], file=sys.stdout)
-        return [balance]
+
+        note = Note(meta, tomorrow, self.full_account, "bean-extract")
+        return [balance, note]
 
     def get_transaction_data(self, fr: str) -> list[dict]:
         # get default category UID
@@ -154,14 +150,14 @@ class Account:
             )
             data = r.json()
             all_data.extend(data["feedItems"])
-        return all_data
+        return sorted(all_data, key=lambda x: x["transactionTime"])
 
-    def transactions(
-        self, fr: str, display: bool = False
-    ) -> list[Transaction]:
+    def transactions(self, fr: str, display: bool = False) -> list[Transaction]:
         tr = self.get_transaction_data(fr)
         txns = []
         for i, item in enumerate(tr):
+            if self.verbose:
+                log(item)
             if (
                 item["source"] == "INTERNAL_TRANSFER"
                 or item["status"] not in VALID_STATUS
@@ -204,9 +200,7 @@ class Account:
         return txns
 
 
-def extract(
-    acc: str, full_account: str, fr: str, to: str
-) -> list[Union[Transaction, Balance]]:
+def extract(acc: str, full_account: str, fr: str) -> list[Union[Transaction, Balance]]:
     conf = Config()
     account = Account(acc, full_account, conf)
     transactions = account.transactions(fr)
