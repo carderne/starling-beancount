@@ -120,7 +120,7 @@ class Account:
             print_extracted_entries([balance], file=sys.stdout)
         return [balance]
 
-    def get_transaction_data(self, fr: str, to: str) -> list[dict]:
+    def get_transaction_data(self, fr: str) -> list[dict]:
         # get default category UID
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
@@ -143,10 +143,9 @@ class Account:
 
         all_data = []
         for category in spaces_categories + [default_category]:
-            url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
+            url = f"/api/v2/feed/account/{self.uid}/category/{category}"
             params = {
-                "minTransactionTimestamp": f"{fr}T00:00:00.000Z",
-                "maxTransactionTimestamp": f"{to}T00:00:00.000Z",
+                "changesSince": f"{fr}T00:00:00.000Z",
             }
             r = httpx.get(
                 self.conf.base + url,
@@ -158,9 +157,9 @@ class Account:
         return all_data
 
     def transactions(
-        self, fr: str, to: str, display: bool = False
+        self, fr: str, display: bool = False
     ) -> list[Transaction]:
-        tr = self.get_transaction_data(fr, to)
+        tr = self.get_transaction_data(fr)
         txns = []
         for i, item in enumerate(tr):
             if (
@@ -200,7 +199,7 @@ class Account:
             txns.append(txn)
 
         if display:
-            print(f"* {self.acc} - {to}")
+            print(f"* {self.acc} - {datetime.date.today()}")
             print_extracted_entries(txns, sys.stdout)
         return txns
 
@@ -208,12 +207,9 @@ class Account:
 def extract(
     acc: str, full_account: str, fr: str, to: str
 ) -> list[Union[Transaction, Balance]]:
-    if not to:
-        to = datetime.date.today().isoformat()
-
     conf = Config()
     account = Account(acc, full_account, conf)
-    transactions = account.transactions(fr, to)
+    transactions = account.transactions(fr)
     balances = account.balances()
     return transactions + balances
 
@@ -221,7 +217,6 @@ def extract(
 def main(
     acc: str,
     fr: str = None,
-    to: str = None,
     balance: bool = False,
     verbose: bool = False,
 ):
@@ -229,16 +224,13 @@ def main(
         echo("Need to provide a from date for transactions")
         return
 
-    if not to:
-        to = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
-
     conf = Config()
 
     account = Account(acc, f"Assets:Starling:{acc.capitalize()}", conf, verbose)
     if balance:
         account.balances(display=True)
     else:
-        account.transactions(fr, to, display=True)
+        account.transactions(fr, display=True)
 
 
 if __name__ == "__main__":
