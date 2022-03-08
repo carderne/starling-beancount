@@ -40,6 +40,7 @@ class Config:
     base: str
     cps: dict
     accs: dict
+    joint: list
     users: dict
 
     def __init__(self, path=None, user_path=None):
@@ -50,6 +51,7 @@ class Config:
         self.base = config["base"]
         self.cps = config["cps"]
         self.accs = {p.stem: open(p).read().strip() for p in tokens.glob("*")}
+        self.joint = config["jointAccs"]
         self.users = config["userIds"]
 
 
@@ -184,7 +186,7 @@ class Account:
             amt = Decimal(it["amount"]["minorUnits"]) / 100
             amt = amt if it["direction"] == "IN" else -amt
             user = it.get("transactingApplicationUserUid", None)
-            if user and self.acc == "joint":
+            if user and self.acc in self.conf.joint:
                 user = self.conf.users[user]
             else:
                 # must add this to not get unwanted UIDs returned

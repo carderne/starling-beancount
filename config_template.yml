@@ -1,5 +1,8 @@
 base: "https://api.starlingbank.com"
 
+jointAccs:
+  - joint
+
 userIds:
   12345678-abcd-9876-efgh-123456789abc: YourName
 
