@@ -4,17 +4,24 @@ import sys
 from pprint import pprint
 from pathlib import Path
 import datetime
+from typing import Union
 
 import httpx
 import attr
 from attr import define
 import typer
 import yaml
-from beancount.core import data, flags, amount
+from beancount.core.amount import Amount
+from beancount.core.data import Transaction, Posting, Balance, new_metadata
+from beancount.core.flags import FLAG_OKAY
 from beancount.ingest.extract import print_extracted_entries
+from beancount.utils.date_utils import parse_date_liberally
 from decimal import Decimal
 
-tokens = Path(__file__).parent.resolve() / "tokens"
+token_path = Path(__file__).parent.resolve() / "tokens"
+config_path = Path(__file__).parents[0] / "config.yml"
+
+VALID_STATUS = ["REVERSED", "SETTLED", "DECLINED", "REFUNDED", "ACCOUNT_CHECK"]
 
 
 def echo(it):
@@ -27,31 +34,20 @@ def log(it):
     print()
 
 
-def parse_accs(accs):
-    if accs == "all":
-        return [p.stem for p in sorted(tokens.glob("*")) if ".gitkeep" not in p.stem]
-    elif "," in accs:
-        return accs.split(",")
-    else:
-        return [accs]
-
-
 @define(init=False)
 class Config:
     base: str
     cps: dict
-    accs: dict
+    tokens: dict
     joint: list
     users: dict
 
-    def __init__(self, path=None, user_path=None):
-        if not path:
-            path = Path(__file__).parents[0] / "config.yml"
-        with open(path) as f:
+    def __init__(self):
+        with open(config_path) as f:
             config = yaml.safe_load(f)
         self.base = config["base"]
         self.cps = config["cps"]
-        self.accs = {p.stem: open(p).read().strip() for p in tokens.glob("*")}
+        self.tokens = {p.stem: open(p).read().strip() for p in token_path.glob("*")}
         self.joint = config["jointAccs"]
         self.users = config["userIds"]
 
@@ -89,7 +85,7 @@ class Account:
     @property
     def token(self):
         try:
-            return self.conf.accs[self.acc]
+            return self.conf.tokens[self.acc]
         except KeyError:
             echo("Token not found, make sure it exists under tokens/")
             sys.exit()
@@ -98,30 +94,21 @@ class Account:
     def headers(self):
         return {"Authorization": f"Bearer {self.token}"}
 
-    def get_balance_data(self):
+    def get_balance_data(self) -> Decimal:
         url = f"/api/v2/accounts/{self.uid}/balance"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
         if self.verbose:
-            keys = [
-                "clearedBalance",
-                "effectiveBalance",
-                "pendingTransactions",
-                "amount",
-                "totalClearedBalance",
-                "totalEffectiveBalance",
-            ]
-            for k in keys:
-                echo(f"{k:<23}: {data[k]['minorUnits']/100}")
+            log(data)
         bal = Decimal(data["totalEffectiveBalance"]["minorUnits"]) / 100
         return bal
 
-    def balance(self, display=False):
+    def balances(self, display=False) -> list[Balance]:
         bal = self.get_balance_data()
-        amt = amount.Amount(bal, "GBP")
-        meta = data.new_metadata("starling-api", 0)
+        amt = Amount(bal, "GBP")
+        meta = new_metadata("starling-api", 0)
         acct = self.full_account
-        balance = data.Balance(
+        balance = Balance(
             meta,
             datetime.date.today() + datetime.timedelta(days=1),
             acct,
@@ -131,11 +118,9 @@ class Account:
         )
         if display:
             print_extracted_entries([balance], file=sys.stdout)
-        return balance
+        return [balance]
 
-    def get_transaction_data(self, fr, to):
-        # first get all the category IDs
-
+    def get_transaction_data(self, fr: str, to: str) -> list[dict]:
         # get default category UID
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
@@ -157,8 +142,7 @@ class Account:
             log(spaces_categories)
 
         all_data = []
-        all_categories = spaces_categories + [default_category]
-        for category in all_categories:
+        for category in spaces_categories + [default_category]:
             url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
             params = {
                 "minTransactionTimestamp": f"{fr}T00:00:00.000Z",
@@ -173,42 +157,40 @@ class Account:
             all_data.extend(data["feedItems"])
         return all_data
 
-    def extract_info(self, it):
-        try:
-            date = it["transactionTime"][:10]
-            payee = it.get("counterPartyName", "FIXME")
-            ref = " ".join(it["reference"].split())
-            acct = self.full_account
-            cp = self.get_cp(it)
-            amt = Decimal(it["amount"]["minorUnits"]) / 100
-            amt = amt if it["direction"] == "IN" else -amt
-            user = it.get("transactingApplicationUserUid", None)
+    def transactions(
+        self, fr: str, to: str, display: bool = False
+    ) -> list[Transaction]:
+        tr = self.get_transaction_data(fr, to)
+        txns = []
+        for i, item in enumerate(tr):
+            if (
+                item["source"] == "INTERNAL_TRANSFER"
+                or item["status"] not in VALID_STATUS
+            ):
+                continue
+
+            date = parse_date_liberally(item["transactionTime"])
+            payee = item.get("counterPartyName", "FIXME")
+            ref = " ".join(item["reference"].split())
+            amt = Decimal(item["amount"]["minorUnits"]) / 100
+            amt = amt if item["direction"] == "IN" else -amt
+
+            user = item.get("transactingApplicationUserUid", None)
             if user and self.acc in self.conf.joint:
                 user = self.conf.users[user]
             else:
                 # must add this to not get unwanted UIDs returned
                 user = None
-        except KeyError:
-            log(it)
-            sys.exit(1)
-        return date, payee, ref, acct, cp, amt, user
-
-    def transactions(self, fr, to, display=False):
-        tr = self.get_transaction_data(fr, to)
-        txns = []
-        for i, it in enumerate(tr):
-            if it["source"] == "INTERNAL_TRANSFER" or it["status"] != "SETTLED":
-                continue
-            date, payee, ref, acct, cp, amt, user = self.extract_info(it)
 
             extra_meta = {"user": user} if user else None
-            meta = data.new_metadata("starling-api", i, extra_meta)
-            p1 = data.Posting(acct, amount.Amount(amt, "GBP"), None, None, None, None)
-            p2 = data.Posting(cp, None, None, None, None, None)
-            txn = data.Transaction(
+            meta = new_metadata("starling-api", i, extra_meta)
+
+            p1 = Posting(self.full_account, Amount(amt, "GBP"), None, None, None, None)
+            p2 = Posting(self.get_cp(item), None, None, None, None, None)
+            txn = Transaction(
                 meta=meta,
-                date=datetime.date.fromisoformat(date),
-                flag=flags.FLAG_OKAY,
+                date=date,
+                flag=FLAG_OKAY,
                 payee=payee,
                 narration=ref,
                 tags=set(),
@@ -218,23 +200,26 @@ class Account:
             txns.append(txn)
 
         if display:
+            print(f"* {self.acc} - {to}")
             print_extracted_entries(txns, sys.stdout)
         return txns
 
 
-def extract(acc: str, full_account: str, fr: str, to: str) -> list:
+def extract(
+    acc: str, full_account: str, fr: str, to: str
+) -> list[Union[Transaction, Balance]]:
     if not to:
         to = datetime.date.today().isoformat()
 
     conf = Config()
     account = Account(acc, full_account, conf)
     transactions = account.transactions(fr, to)
-    balance = account.balance()
-    return transactions + [balance]
+    balances = account.balances()
+    return transactions + balances
 
 
 def main(
-    accs: str,
+    acc: str,
     fr: str = None,
     to: str = None,
     balance: bool = False,
@@ -249,15 +234,11 @@ def main(
 
     conf = Config()
 
-    accs = parse_accs(accs)
-    for acc in accs:
-        account = Account(acc, f"Assets:Starling:{acc.capitalize()}", conf, verbose)
-        if balance:
-            account.balance(display=True)
-        else:
-            print(f"* {acc} - {to}")
-            account.transactions(fr, to, display=True)
-            print("\n\n\n")
+    account = Account(acc, f"Assets:Starling:{acc.capitalize()}", conf, verbose)
+    if balance:
+        account.balances(display=True)
+    else:
+        account.transactions(fr, to, display=True)
 
 
 if __name__ == "__main__":

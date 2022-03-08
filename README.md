@@ -34,7 +34,7 @@ If you don't want to do this, just delete all but the `DEFAULT` pair.
 
 Then run the script:
 ```
-Usage: star.py [OPTIONS] ACCS
+Usage: star.py [OPTIONS] ACC
 
 Options:
   --fr TEXT
