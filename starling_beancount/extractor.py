@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 from pprint import pprint
 import sys
-from typing import Union
+from typing import Union, List
 
 from beancount.core.amount import Amount
 from beancount.core.data import Transaction, Posting, Balance, Note, new_metadata
@@ -75,7 +75,7 @@ class Account:
         bal = Decimal(data["totalClearedBalance"]["minorUnits"]) / 100
         return bal
 
-    def balances(self, display=False) -> list[Balance]:
+    def balances(self, display=False) -> List[Balance]:
         bal = self.get_balance_data()
         amt = Amount(bal, "GBP")
         meta = new_metadata("starling-api", 0)
@@ -88,7 +88,7 @@ class Account:
         note = Note(meta, tomorrow, self.account_name, "bean-extract")
         return [balance, note]
 
-    def get_transaction_data(self, since: str) -> list[dict]:
+    def get_transaction_data(self, since: str) -> List[dict]:
         # get default category UID
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
@@ -124,7 +124,7 @@ class Account:
             all_data.extend(data["feedItems"])
         return sorted(all_data, key=lambda x: x["transactionTime"])
 
-    def transactions(self, since: str, display: bool = False) -> list[Transaction]:
+    def transactions(self, since: str, display: bool = False) -> List[Transaction]:
         tr = self.get_transaction_data(since)
         txns = []
         for i, item in enumerate(tr):
@@ -176,7 +176,7 @@ class Account:
         return txns
 
 
-def extract(acc: str, since: str) -> list[Union[Transaction, Balance]]:
+def extract(acc: str, since: str) -> List[Union[Transaction, Balance]]:
     """bean-extract entrypoint"""
     account = Account(acc)
     transactions = account.transactions(since)
