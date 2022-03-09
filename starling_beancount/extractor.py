@@ -16,8 +16,9 @@ import httpx
 import typer
 import yaml
 
-token_path = Path(__file__).parent.resolve() / "tokens"
-config_path = Path(__file__).parents[0] / "config.yml"
+repo_root = Path(__file__).parents[1].resolve()
+token_path = repo_root / "tokens"
+config_path = repo_root / "config.yml"
 
 VALID_STATUS = ["REVERSED", "SETTLED", "REFUNDED"]
 
@@ -196,5 +197,9 @@ def main(acc: str, since: str = None, balance: bool = False, verbose: bool = Fal
         account.transactions(since, display=True)
 
 
-if __name__ == "__main__":
+def cli():
     typer.run(main)
+
+
+if __name__ == "__main__":
+    cli()

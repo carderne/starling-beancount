@@ -5,8 +5,7 @@ from beancount.ingest import importer
 import beancount.loader
 from beancount.core.data import Note
 
-import star
-
+from . import extractor
 
 
 def interesting(account_name):
@@ -32,7 +31,7 @@ def last_date(bean_file, account_name):
     except ValueError:
         print("No existing bean-extract notes, make one manually!")
         print("Example:")
-        print('2022-03-01 note Assets:Starling:Bus "bean-extract"')
+        print('2022-03-01 note Assets:Starling "bean-extract"')
         sys.exit(0)
 
     return max_date
@@ -52,7 +51,7 @@ class StarlingImporter(importer.ImporterProtocol):
 
     def extract(self, file, existing_entries=None):
         since = last_date(self.bean_file, self.account_name)
-        res = star.extract(self.acc, since)
+        res = extractor.extract(self.acc, since)
         return res
 
     # Deliberately no file_account, file_date, file_name
