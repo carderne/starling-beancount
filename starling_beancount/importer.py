@@ -29,8 +29,8 @@ def last_date(bean_file, account_name):
     try:
         max_date = max(dates)
     except ValueError:
-        print("No existing bean-extract notes, make one manually!")
-        print("Example:")
+        print("No existing 'bean-extract' notes!")
+        print("Add this to your ledger specifying the date to extract from:")
         print('2022-03-01 note Assets:Starling "bean-extract"')
         sys.exit(0)
 
