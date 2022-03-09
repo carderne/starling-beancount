@@ -61,7 +61,7 @@ class Account:
             uid = data["accounts"][0]["accountUid"]
         except KeyError:
             log(data)
-            sys.exit()
+            sys.exit(1)
         if self.verbose:
             log(f"{uid=}")
         return uid
@@ -98,6 +98,9 @@ class Account:
         url = f"/api/v2/account/{self.uid}/spaces"
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
+        if "error" in data:
+            echo(f"Error: {data['error_description']}")
+            sys.exit(1)
         try:
             spaces_categories = [
                 sp["savingsGoalUid"] for sp in r.json()["savingsGoals"]
