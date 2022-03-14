@@ -32,7 +32,7 @@ def last_date(bean_file, account_name):
         print("No existing 'bean-extract' notes!")
         print("Add this to your ledger specifying the date to extract from:")
         print('2022-03-01 note Assets:Starling "bean-extract"')
-        sys.exit(0)
+        return
 
     return max_date
 

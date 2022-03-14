@@ -63,7 +63,7 @@ class Account:
             log(data)
             sys.exit(1)
         if self.verbose:
-            log(f"{uid=}")
+            log(f"{uid}")
         return uid
 
     def get_balance_data(self) -> Decimal:
