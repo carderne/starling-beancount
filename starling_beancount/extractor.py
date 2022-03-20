@@ -52,6 +52,9 @@ class Account:
         self.token = open(token_path / self.acc).read().strip()
         self.headers = {"Authorization": f"Bearer {self.token}"}
         self.uid = self.get_uid()
+        self.today = datetime.date.today()
+        self.tomorrow = self.today + datetime.timedelta(days=1)
+        self.start = self.today
 
     def get_uid(self) -> str:
         url = "/api/v2/accounts"
@@ -78,15 +81,22 @@ class Account:
     def balances(self, display=False) -> List[Balance]:
         bal = self.get_balance_data()
         amt = Amount(bal, "GBP")
-        meta = new_metadata("starling-api", 0)
-        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        meta = new_metadata("starling-api", 999)
 
-        balance = Balance(meta, tomorrow, self.account_name, amt, None, None)
+        balance = Balance(meta, self.tomorrow, self.account_name, amt, None, None)
         if display:
             print_extracted_entries([balance], file=sys.stdout)
 
-        note = Note(meta, tomorrow, self.account_name, "bean-extract")
-        return [balance, note]
+        return [balance]
+
+    def notes(self) -> List[Note]:
+        meta_start = new_metadata("starling-api", -10)
+        meta_end = new_metadata("starling-api", 998)
+        note_start = Note(
+            meta_start, self.start, self.account_name, "start bean-extract"
+        )
+        note_end = Note(meta_end, self.tomorrow, self.account_name, "end bean-extract")
+        return [note_start, note_end]
 
     def get_transaction_data(self, since: str) -> List[dict]:
         # get default category UID
@@ -173,8 +183,11 @@ class Account:
             )
             txns.append(txn)
 
+        if len(txns) > 0:
+            self.start = txns[0].date
+
         if display:
-            print(f"* {self.acc} - {datetime.date.today()}")
+            print(f"* {self.acc} - {self.today}")
             print_extracted_entries(txns, sys.stdout)
         return txns
 
@@ -184,7 +197,8 @@ def extract(acc: str, since: str) -> List[Union[Transaction, Balance]]:
     account = Account(acc)
     transactions = account.transactions(since)
     balances = account.balances()
-    return transactions + balances
+    notes = account.notes()
+    return transactions + balances + notes
 
 
 def main(acc: str, since: str = None, balance: bool = False, verbose: bool = False):

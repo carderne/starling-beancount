@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 from beancount.ingest import importer
