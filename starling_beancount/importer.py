@@ -1,29 +1,28 @@
+from datetime import date
 from pathlib import Path
+from typing import Any
 
-from beancount.ingest import importer
 import beancount.loader
 from beancount.core.data import Note
+from beancount.ingest import importer  # type: ignore[import]
 
 from . import extractor
 
 
-def interesting(account_name):
-    def filt(entry):
-        if (
-            isinstance(entry, Note)
-            and entry.account == account_name
-            and "bean-extract" in entry.comment
-        ):
-            return True
-        else:
-            return False
-
-    return filt
+def filt_notes(entry: Any, account_name: str) -> bool:
+    if (
+        isinstance(entry, Note)
+        and entry.account == account_name
+        and "bean-extract" in entry.comment
+    ):
+        return True
+    else:
+        return False
 
 
-def last_date(bean_file, account_name):
-    entries, _, _ = beancount.loader.load_file(bean_file)
-    notes = filter(interesting(account_name), entries)
+def last_date(bean_file: Path, account_name: str) -> date:
+    entries, _, _ = beancount.loader.load_file(str(bean_file))
+    notes = [e for e in entries if filt_notes(e, account_name)]
     dates = [r.date for r in notes]
     try:
         max_date = max(dates)
@@ -31,24 +30,24 @@ def last_date(bean_file, account_name):
         print("No existing 'bean-extract' notes!")
         print("Add this to your ledger specifying the date to extract from:")
         print('2022-03-01 note Assets:Starling "bean-extract"')
-        return
+        return date(2000, 1, 1)
 
     return max_date
 
 
-class StarlingImporter(importer.ImporterProtocol):
+class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimported]
     def __init__(self, acc: str, bean_file: Path):
         self.acc = acc
         self.account_name = ":".join((w.capitalize() for w in acc.split("_")))
         self.bean_file = bean_file
 
-    def name(self):
+    def name(self) -> str:
         return self.account_name
 
-    def identify(self, file):
+    def identify(self, file: Path) -> bool:
         return self.acc in file.name
 
-    def extract(self, file, existing_entries=None):
+    def extract(self, file: str) -> list:
         since = last_date(self.bean_file, self.account_name)
         res = extractor.extract(self.acc, since)
         return res

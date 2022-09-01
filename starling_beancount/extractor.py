@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 
-import datetime
+import sys
+from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 from pprint import pprint
-import sys
-from typing import Union, List
+from typing import Any, Optional
 
-from beancount.core.amount import Amount
-from beancount.core.data import Transaction, Posting, Balance, Note, new_metadata
-from beancount.core.flags import FLAG_OKAY
-from beancount.ingest.extract import print_extracted_entries
-from beancount.utils.date_utils import parse_date_liberally
-from decimal import Decimal
 import httpx
 import typer
 import yaml
+from beancount.core.amount import Amount
+from beancount.core.data import Balance, Note, Posting, Transaction, new_metadata
+from beancount.core.flags import FLAG_OKAY
+from beancount.ingest.extract import print_extracted_entries  # type: ignore[import]
+from beancount.utils.date_utils import parse_date_liberally  # type: ignore[import]
 
 repo_root = Path(__file__).parents[1].resolve()
 token_path = repo_root / "tokens"
@@ -23,18 +23,18 @@ config_path = repo_root / "config.yml"
 VALID_STATUS = ["REVERSED", "SETTLED", "REFUNDED"]
 
 
-def echo(it):
+def echo(it: str) -> None:
     print(it, file=sys.stderr)
 
 
-def log(it):
+def log(it: Any) -> None:
     print("\n\n\n")
     pprint(it, stream=sys.stderr)
     print()
 
 
 class Config:
-    def __init__(self):
+    def __init__(self) -> None:
         with open(config_path) as f:
             config = yaml.safe_load(f)
         self.base = config["base"]
@@ -44,7 +44,7 @@ class Config:
 
 
 class Account:
-    def __init__(self, acc, verbose=False):
+    def __init__(self, acc: str, verbose: bool = False) -> None:
         self.acc = acc
         self.verbose = verbose
         self.conf = Config()
@@ -52,8 +52,8 @@ class Account:
         self.token = open(token_path / self.acc).read().strip()
         self.headers = {"Authorization": f"Bearer {self.token}"}
         self.uid = self.get_uid()
-        self.today = datetime.date.today()
-        self.tomorrow = self.today + datetime.timedelta(days=1)
+        self.today = date.today()
+        self.tomorrow = self.today + timedelta(days=1)
         self.start = self.today
 
     def get_uid(self) -> str:
@@ -61,7 +61,7 @@ class Account:
         r = httpx.get(self.conf.base + url, headers=self.headers)
         data = r.json()
         try:
-            uid = data["accounts"][0]["accountUid"]
+            uid = str(data["accounts"][0]["accountUid"])
         except KeyError:
             log(data)
             sys.exit(1)
@@ -78,7 +78,7 @@ class Account:
         bal = Decimal(data["totalClearedBalance"]["minorUnits"]) / 100
         return bal
 
-    def balances(self, display=False) -> List[Balance]:
+    def balance(self, display: bool = False) -> Balance:
         bal = self.get_balance_data()
         amt = Amount(bal, "GBP")
         meta = new_metadata("starling-api", 999)
@@ -87,14 +87,14 @@ class Account:
         if display:
             print_extracted_entries([balance], file=sys.stdout)
 
-        return [balance]
+        return balance
 
-    def notes(self) -> List[Note]:
+    def note(self) -> Note:
         meta_end = new_metadata("starling-api", 998)
         note_end = Note(meta_end, self.tomorrow, self.account_name, "end bean-extract")
-        return [note_end]
+        return note_end
 
-    def get_transaction_data(self, since: str) -> List[dict]:
+    def get_transaction_data(self, since: date) -> list[dict]:
         # get default category UID
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
@@ -131,9 +131,9 @@ class Account:
             )
             data = r.json()
             all_data.extend(data["feedItems"])
-        return sorted(all_data, key=lambda x: x["transactionTime"])
+        return sorted(all_data, key=lambda x: str(x["transactionTime"]))
 
-    def transactions(self, since: str, display: bool = False) -> List[Transaction]:
+    def transactions(self, since: date, display: bool = False) -> list[Transaction]:
         tr = self.get_transaction_data(since)
         txns = []
         for i, item in enumerate(tr):
@@ -166,7 +166,7 @@ class Account:
             extra_meta = {"user": user} if user else None
             meta = new_metadata("starling-api", i, extra_meta)
             p1 = Posting(self.account_name, Amount(amt, "GBP"), None, None, None, None)
-            p2 = Posting(cp, None, None, None, None, None)
+            p2 = Posting(cp, None, None, None, None, None)  # type: ignore[arg-type]
             txn = Transaction(
                 meta=meta,
                 date=date,
@@ -188,16 +188,18 @@ class Account:
         return txns
 
 
-def extract(acc: str, since: str) -> List[Union[Transaction, Balance]]:
+def extract(acc: str, since: date) -> list[Transaction | Balance | Note]:
     """bean-extract entrypoint"""
     account = Account(acc)
-    transactions = account.transactions(since)
-    balances = account.balances()
-    notes = account.notes()
-    return transactions + balances + notes
+    txns = account.transactions(since)
+    bal = account.balance()
+    note = account.note()
+    return [*txns, bal, note]
 
 
-def main(acc: str, since: str = None, balance: bool = False, verbose: bool = False):
+def main(
+    acc: str, since: Optional[str] = None, balance: bool = False, verbose: bool = False
+) -> None:
     """CLI entrypoint"""
     if not since and not balance:
         echo("Need to provide a 'since' date for transactions")
@@ -205,12 +207,14 @@ def main(acc: str, since: str = None, balance: bool = False, verbose: bool = Fal
 
     account = Account(acc, verbose)
     if balance:
-        account.balances(display=True)
+        account.balance(display=True)
     else:
-        account.transactions(since, display=True)
+        assert since is not None
+        since_dt = date.fromisoformat(since)
+        account.transactions(since_dt, display=True)
 
 
-def cli():
+def cli() -> None:
     typer.run(main)
 
 
