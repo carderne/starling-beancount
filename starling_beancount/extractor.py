@@ -90,13 +90,9 @@ class Account:
         return [balance]
 
     def notes(self) -> List[Note]:
-        meta_start = new_metadata("starling-api", -10)
         meta_end = new_metadata("starling-api", 998)
-        note_start = Note(
-            meta_start, self.start, self.account_name, "start bean-extract"
-        )
         note_end = Note(meta_end, self.tomorrow, self.account_name, "end bean-extract")
-        return [note_start, note_end]
+        return [note_end]
 
     def get_transaction_data(self, since: str) -> List[dict]:
         # get default category UID
