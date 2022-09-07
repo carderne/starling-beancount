@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import httpx
 import typer
@@ -188,7 +188,7 @@ class Account:
         return txns
 
 
-def extract(acc: str, since: date) -> list[Transaction | Balance | Note]:
+def extract(acc: str, since: date) -> list[Union[Transaction, Balance, Note]]:
     """bean-extract entrypoint"""
     account = Account(acc)
     txns = account.transactions(since)
