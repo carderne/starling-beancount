@@ -20,8 +20,8 @@ def filt_notes(entry: Any, account_name: str) -> bool:
         return False
 
 
-def last_date(bean_file: Path, account_name: str) -> date:
-    entries, _, _ = beancount.loader.load_file(str(bean_file))
+def last_date(bean_path: Path, account_name: str) -> date:
+    entries, _, _ = beancount.loader.load_file(str(bean_path))
     notes = [e for e in entries if filt_notes(e, account_name)]
     dates = [r.date for r in notes]
     try:
@@ -36,10 +36,18 @@ def last_date(bean_file: Path, account_name: str) -> date:
 
 
 class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimported]
-    def __init__(self, acc: str, bean_file: Path):
+    def __init__(
+        self,
+        config_path: Path,
+        acc: str,
+        token_path: Path,
+        bean_path: Path,
+    ):
+        self.config_path = config_path
         self.acc = acc
+        self.token_path = token_path
         self.account_name = ":".join((w.capitalize() for w in acc.split("_")))
-        self.bean_file = bean_file
+        self.bean_path = bean_path
 
     def name(self) -> str:
         return self.account_name
@@ -48,8 +56,8 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
         return self.acc in file.name
 
     def extract(self, file: str) -> list:
-        since = last_date(self.bean_file, self.account_name)
-        res = extractor.extract(self.acc, since)
+        since = last_date(self.bean_path, self.account_name)
+        res = extractor.extract(self.config_path, self.acc, self.token_path, since)
         return res
 
     # Deliberately no file_account, file_date, file_name

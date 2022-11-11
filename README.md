@@ -15,27 +15,18 @@ transaction:read
 space:read
 ```
 
-Save the provided token text in a file under the directory `tokens/`, eg `tokens/assets_starling`.
+Save the provided token text in a file somewhere useful (near your beancount files probably).
 
-👉 The token name will be converted internally to an account name by replacing '_' with ':' (for Windows compatibility) and capitalizing. So `assets_starling` becomes `Assets:Starling`. **Make sure to name your tokens appropriately!**
-
-Clone and install requirements:
+Install this library:
 ```bash
-git clone https://github.com/carderne/starling-beancount.git
-cd starling-beancount
-pip install -e .
+pip install git+https://github.com/carderne/starling-beancount
 ```
 
 ## Configuration
-Then rename the config template:
-```bash
-mv config_template.yml config.yml
-```
-
-And edit it to suit your needs.
-The `jointAccs` and `userIds` fields are only needed if you have a joint account and you want to add metadata about which user made a transaction.
-The `cps` are key:value pairs of Starling transaction categories, and the beancount Account you want them assigned to.
-If you don't want to do this, just delete all but the `DEFAULT` pair.
+Make a copy of [config.yml](./config.yml) and edit it to suit your needs.
+- The `jointAccs` and `userIds` fields are only needed if you have a joint account and you want to add metadata about which user made a transaction.
+- The `cps` are key:value pairs of Starling transaction categories, and the beancount Account you want them assigned to.
+- If you don't want to do this, just delete all but the `DEFAULT` pair.
 
 ## 💪 Running the script
 
@@ -66,7 +57,12 @@ from starling_beancount.importer import StarlingImporter
 
 CONFIG = [
     ...,
-    StarlingImporter("assets_starling", "./path/to/ledger.bean"),
+    StarlingImporter(
+        config_path="path/to/config.yml",
+        acc="assets_starling",
+        token_path="path/to/token.txt",
+        bean_path="path/to/ledger.bean",
+    ),
 ]
 ```
 
@@ -78,9 +74,9 @@ A new note will be added each time you run the script, so that you don't have to
 ```
 
 Last thing! You must create the "target" file that `bean-extract` will look for.
-Since we don't actually need a file (it all comes from the API), just add a file to wherever you would normally place them (probably wherever you keep your ledger files, _not_ in this repo.
+Since we don't actually need a file (it all comes from the API), just add a file to wherever you would normally place them.
 
-👉 Make sure to name this in the same way as the tokens.
+👉 Make sure to name this the same as the `acc=` argument to `StarlingImporter` above.
 
 ```bash
 touch ./raw/assets_starling

@@ -16,10 +16,6 @@ from beancount.core.flags import FLAG_OKAY
 from beancount.ingest.extract import print_extracted_entries  # type: ignore[import]
 from beancount.utils.date_utils import parse_date_liberally  # type: ignore[import]
 
-repo_root = Path(__file__).parents[1].resolve()
-token_path = repo_root / "tokens"
-config_path = repo_root / "config.yml"
-
 VALID_STATUS = ["REVERSED", "SETTLED", "REFUNDED"]
 
 
@@ -34,7 +30,7 @@ def log(it: Any) -> None:
 
 
 class Config:
-    def __init__(self) -> None:
+    def __init__(self, config_path: Path) -> None:
         with open(config_path) as f:
             config = yaml.safe_load(f)
         self.base = config["base"]
@@ -44,10 +40,16 @@ class Config:
 
 
 class Account:
-    def __init__(self, acc: str, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        config_path: Path,
+        acc: str,
+        token_path: Path,
+        verbose: bool = False,
+    ) -> None:
         self.acc = acc
         self.verbose = verbose
-        self.conf = Config()
+        self.conf = Config(config_path=config_path)
         self.account_name = ":".join((w.capitalize() for w in self.acc.split("_")))
         self.token = open(token_path / self.acc).read().strip()
         self.headers = {"Authorization": f"Bearer {self.token}"}
@@ -94,7 +96,7 @@ class Account:
         note_end = Note(meta_end, self.tomorrow, self.account_name, "end bean-extract")
         return note_end
 
-    def get_transaction_data(self, since: date) -> list[dict]:
+    def spaces(self) -> list[str]:
         # get default category UID
         url = "/api/v2/accounts"
         r = httpx.get(self.conf.base + url, headers=self.headers)
@@ -108,9 +110,7 @@ class Account:
             echo(f"Error: {data['error_description']}")
             sys.exit(1)
         try:
-            spaces_categories = [
-                sp["savingsGoalUid"] for sp in r.json()["savingsGoals"]
-            ]
+            spaces_categories = [sp["savingsGoalUid"] for sp in data["savingsGoals"]]
         except KeyError:
             spaces_categories = []
 
@@ -118,12 +118,24 @@ class Account:
             log(default_category)
             log(spaces_categories)
 
+        return [default_category] + spaces_categories
+
+    def get_transaction_data(self, since: date, new: bool = True) -> list[dict]:
+        categories = self.spaces()
+
         all_data = []
-        for category in spaces_categories + [default_category]:
+        for category in categories:
             url = f"/api/v2/feed/account/{self.uid}/category/{category}"
+            if new:
+                url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
             params = {
                 "changesSince": f"{since}T00:00:00.000Z",
             }
+            if new:
+                params = {
+                    "minTransactionTimestamp": f"{since}T00:00:00.000Z",
+                    "maxTransactionTimestamp": f"{self.tomorrow}T00:00:00.000Z",
+                }
             r = httpx.get(
                 self.conf.base + url,
                 params=params,
@@ -188,9 +200,14 @@ class Account:
         return txns
 
 
-def extract(acc: str, since: date) -> list[Union[Transaction, Balance, Note]]:
+def extract(
+    config_path: Path,
+    acc: str,
+    token_path: Path,
+    since: date,
+) -> list[Union[Transaction, Balance, Note]]:
     """bean-extract entrypoint"""
-    account = Account(acc)
+    account = Account(config_path=config_path, acc=acc, token_path=token_path)
     txns = account.transactions(since)
     bal = account.balance()
     note = account.note()
@@ -198,14 +215,21 @@ def extract(acc: str, since: date) -> list[Union[Transaction, Balance, Note]]:
 
 
 def main(
-    acc: str, since: Optional[str] = None, balance: bool = False, verbose: bool = False
+    config_path: Path,
+    acc: str,
+    token_path: Path,
+    since: Optional[str] = None,
+    balance: bool = False,
+    verbose: bool = False,
 ) -> None:
     """CLI entrypoint"""
     if not since and not balance:
         echo("Need to provide a 'since' date for transactions")
         return
 
-    account = Account(acc, verbose)
+    account = Account(
+        config_path=config_path, acc=acc, token_path=token_path, verbose=verbose
+    )
     if balance:
         account.balance(display=True)
     else:
