@@ -1,2 +1,79 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [
+    "setuptools>=65",
+    "wheel>=0.37.1",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starling-beancount"
+description = "Import Starling Bank transactions in Beancount"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.9"
+
+authors = [
+    {name = "Chris Arderne", email="chris@rdrn.me"},
+]
+
+keywords = ["accounting", "cli", "beancount", "banking"]
+
+classifiers = [
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Unix",
+  "Programming Language :: Python",
+]
+
+dependencies = [
+    "beancount",
+    "httpx",
+    "PyYAML",
+    "typer[all]>=0.7.0",
+]
+
+version = "0.0.1"
+
+[tool.setuptools]
+packages = ["starling_beancount"]
+
+[project.scripts]
+starling = "starling_beancount.extractor:cli"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "build",
+    "flake8",
+    "isort",
+    "mypy",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "setuptools-scm",
+    "twine",
+]
+
+[project.urls]
+homepage = "https://github.com/carderne/starling-beancount"
+
+[tool.black]
+line-length = 88
+include = '\.pyi?$'
+exclude = ".git,.hg,.mypy_cache,.tox,.venv,_build,buck-out,build,dist"
+
+[tool.mypy]
+show_error_codes = true
+show_error_context = true
+show_traceback = true
+disallow_untyped_defs = true
+disallow_any_unimported = true
+no_implicit_optional = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[tool.isort]
+profile = "black"
+skip = ".tox,.eggs,ci/templates,build,dist"
