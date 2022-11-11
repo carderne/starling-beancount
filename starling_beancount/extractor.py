@@ -51,7 +51,7 @@ class Account:
         self.verbose = verbose
         self.conf = Config(config_path=config_path)
         self.account_name = ":".join((w.capitalize() for w in self.acc.split("_")))
-        self.token = open(token_path / self.acc).read().strip()
+        self.token = token_path.read_text().strip()
         self.headers = {"Authorization": f"Bearer {self.token}"}
         self.uid = self.get_uid()
         self.today = date.today()

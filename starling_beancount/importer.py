@@ -6,7 +6,7 @@ import beancount.loader
 from beancount.core.data import Note
 from beancount.ingest import importer  # type: ignore[import]
 
-from . import extractor
+from starling_beancount import extractor
 
 
 def filt_notes(entry: Any, account_name: str) -> bool:
