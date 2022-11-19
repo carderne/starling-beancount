@@ -2,6 +2,7 @@
 requires = [
     "setuptools>=65",
     "wheel>=0.37.1",
+    "setuptools-scm[toml]>=7.0.5",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -32,10 +33,12 @@ dependencies = [
     "typer[all]>=0.7.0",
 ]
 
-version = "0.0.1"
+dynamic = ["version"]
 
 [tool.setuptools]
 packages = ["starling_beancount"]
+
+[tool.setuptools_scm]
 
 [project.scripts]
 starling = "starling_beancount.extractor:cli"
