@@ -119,22 +119,16 @@ class Account:
 
         return [default_category] + spaces_categories
 
-    def get_transaction_data(self, since: date, new: bool = True) -> list[dict]:
+    def get_transaction_data(self, since: date) -> list[dict]:
         categories = self.spaces()
 
         all_data = []
         for category in categories:
-            url = f"/api/v2/feed/account/{self.uid}/category/{category}"
-            if new:
-                url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
+            url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
             params = {
-                "changesSince": f"{since}T00:00:00.000Z",
+                "minTransactionTimestamp": f"{since}T00:00:00.000Z",
+                "maxTransactionTimestamp": "2100-01-01T00:00:00.000Z",
             }
-            if new:
-                params = {
-                    "minTransactionTimestamp": f"{since}T00:00:00.000Z",
-                    "maxTransactionTimestamp": "2100-01-01T00:00:00.000Z",
-                }
             r = httpx.get(
                 self.conf.base + url,
                 params=params,
