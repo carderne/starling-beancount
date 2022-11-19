@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from pprint import pprint
@@ -55,7 +55,6 @@ class Account:
         self.headers = {"Authorization": f"Bearer {self.token}"}
         self.uid = self.get_uid()
         self.today = date.today()
-        self.tomorrow = self.today + timedelta(days=1)
         self.start = self.today
 
     def get_uid(self) -> str:
@@ -85,7 +84,7 @@ class Account:
         amt = Amount(bal, "GBP")
         meta = new_metadata("starling-api", 999)
 
-        balance = Balance(meta, self.tomorrow, self.account_name, amt, None, None)
+        balance = Balance(meta, self.today, self.account_name, amt, None, None)
         if display:
             print_extracted_entries([balance], file=sys.stdout)
 
@@ -93,7 +92,7 @@ class Account:
 
     def note(self) -> Note:
         meta_end = new_metadata("starling-api", 998)
-        note_end = Note(meta_end, self.tomorrow, self.account_name, "end bean-extract")
+        note_end = Note(meta_end, self.today, self.account_name, "end bean-extract")
         return note_end
 
     def spaces(self) -> list[str]:
@@ -134,7 +133,7 @@ class Account:
             if new:
                 params = {
                     "minTransactionTimestamp": f"{since}T00:00:00.000Z",
-                    "maxTransactionTimestamp": f"{self.tomorrow}T00:00:00.000Z",
+                    "maxTransactionTimestamp": "2100-01-01T00:00:00.000Z",
                 }
             r = httpx.get(
                 self.conf.base + url,
