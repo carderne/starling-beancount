@@ -19,7 +19,7 @@ Save the provided token text in a file somewhere useful (near your beancount fil
 
 Install this library:
 ```bash
-pip install git+https://github.com/carderne/starling-beancount
+pip install starling-beancount
 ```
 
 ## Configuration
