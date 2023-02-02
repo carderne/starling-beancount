@@ -52,7 +52,7 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
     def name(self) -> str:
         return self.account_name
 
-    def identify(self, file: Path) -> bool:
+    def identify(self, file: "FileMemo") -> bool:
         return self.acc in file.name
 
     def extract(self, file: str) -> list:
@@ -60,5 +60,11 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
         res = extractor.extract(self.config_path, self.acc, self.token_path, since)
         return res
 
-    # Deliberately no file_account, file_date, file_name
-    # So that bean_file doesn't move the target files
+    def file_account(self, file):
+        return self.account_name
+
+    def file_name(self, file):
+        return None
+
+    def file_date(self, file):
+        return None
