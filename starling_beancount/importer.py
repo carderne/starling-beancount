@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +56,7 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
         return self.acc in file.name
 
     def extract(self, file: str) -> list:
-        since = last_date(self.bean_path, self.account_name)
+        since = last_date(self.bean_path, self.account_name) - timedelta(days=3)
         res = extractor.extract(self.config_path, self.acc, self.token_path, since)
         return res
 
