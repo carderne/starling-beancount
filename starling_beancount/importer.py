@@ -42,12 +42,14 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
         acc: str,
         token_path: Path,
         bean_path: Path,
+        lag: int = 3,
     ):
         self.config_path = config_path
         self.acc = acc
         self.token_path = token_path
         self.account_name = ":".join((w.capitalize() for w in acc.split("_")))
         self.bean_path = bean_path
+        self.lag = lag
 
     def name(self) -> str:
         return self.account_name
@@ -56,7 +58,7 @@ class StarlingImporter(importer.ImporterProtocol):  # type: ignore[no-any-unimpo
         return self.acc in file.name
 
     def extract(self, file: str, existing_entries: Any = None) -> list:
-        since = last_date(self.bean_path, self.account_name) - timedelta(days=3)
+        since = last_date(self.bean_path, self.account_name) - timedelta(days=self.lag)
         res = extractor.extract(self.config_path, self.acc, self.token_path, since)
         return res
 
