@@ -19,14 +19,12 @@ Save the provided token text in a file somewhere useful (near your beancount fil
 
 Install this library:
 ```bash
-pip install starling-beancount
+pip install starling-beancount smart_importer
 ```
 
 ## Configuration
 Make a copy of [config.yml](./config.yml) and edit it to suit your needs.
 - The `jointAccs` and `userIds` fields are only needed if you have a joint account and you want to add metadata about which user made a transaction.
-- The `cps` are key:value pairs of Starling transaction categories, and the beancount Account you want them assigned to.
-- If you don't want to do this, just delete all but the `DEFAULT` pair.
 
 ## 💪 Running the script
 
@@ -54,15 +52,17 @@ starling assets_starling --balance
 You will need to add something like the following to your `bean-extract` configuration (eg `config.py`):
 ```python
 from starling_beancount.importer import StarlingImporter
+from smart_importer import apply_hooks, PredictPostings
+from smart_importer.detector import DuplicateDetector
 
 CONFIG = [
     ...,
-    StarlingImporter(
+    apply_hooks(StarlingImporter(
         config_path="path/to/config.yml",
         acc="assets_starling",
         token_path="path/to/token.txt",
         bean_path="path/to/ledger.bean",
-    ),
+    ), [DuplicateDetector(), PredictPostings()])
 ]
 ```
 

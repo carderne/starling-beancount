@@ -34,7 +34,6 @@ class Config:
         with open(config_path) as f:
             config = yaml.safe_load(f)
         self.base = config["base"]
-        self.cps = config["cps"]
         self.joint = config["jointAccs"]
         self.users = config["userIds"]
 
@@ -163,15 +162,9 @@ class Account:
                 # must add this to not get unwanted UIDs returned
                 user = None
 
-            try:
-                cp = self.conf.cps[item["spendingCategory"]]
-            except KeyError:
-                cp = self.conf.cps["DEFAULT"]
-
             extra_meta = {"user": user} if user else None
             meta = new_metadata("starling-api", i, extra_meta)
             p1 = Posting(self.account_name, Amount(amt, "GBP"), None, None, None, None)
-            p2 = Posting(cp, None, None, None, None, None)  # type: ignore[arg-type]
             txn = Transaction(
                 meta=meta,
                 date=date,
@@ -180,7 +173,7 @@ class Account:
                 narration=ref,
                 tags=set(),
                 links=set(),
-                postings=[p1, p2],
+                postings=[p1],
             )
             txns.append(txn)
 
