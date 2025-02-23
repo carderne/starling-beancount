@@ -1,20 +1,19 @@
-#!/usr/bin/env python3
-
 import sys
-from datetime import date
+import datetime as dt
 from decimal import Decimal
 from pathlib import Path
 from pprint import pprint
-from typing import Any, Optional, Union
+from typing import Any
 
 import httpx
 import typer
 import yaml
+import dateutil.parser
 from beancount.core.amount import Amount
 from beancount.core.data import Balance, Note, Posting, Transaction, new_metadata
 from beancount.core.flags import FLAG_OKAY
-from beancount.ingest.extract import print_extracted_entries  # type: ignore[import]
-from beancount.utils.date_utils import parse_date_liberally  # type: ignore[import]
+
+from starling_beancount.utils import print_extracted_entries
 
 VALID_STATUS = ["REVERSED", "SETTLED", "REFUNDED"]
 
@@ -53,7 +52,7 @@ class Account:
         self.token = token_path.read_text().strip()
         self.headers = {"Authorization": f"Bearer {self.token}"}
         self.uid = self.get_uid()
-        self.today = date.today()
+        self.today = dt.date.today()
         self.start = self.today
 
     def get_uid(self) -> str:
@@ -91,7 +90,7 @@ class Account:
 
     def note(self) -> Note:
         meta_end = new_metadata("starling-api", 998)
-        note_end = Note(meta_end, self.today, self.account_name, "end bean-extract")
+        note_end = Note(meta_end, self.today, self.account_name, "end bean-extract", tags=None, links=None)
         return note_end
 
     def spaces(self) -> list[str]:
@@ -118,10 +117,10 @@ class Account:
 
         return [default_category] + spaces_categories
 
-    def get_transaction_data(self, since: date) -> list[dict]:
+    def get_transaction_data(self, since: dt.date) -> list[dict[str, Any]]:
         categories = self.spaces()
 
-        all_data = []
+        all_data: list[dict[str, Any]] = []
         for category in categories:
             url = f"/api/v2/feed/account/{self.uid}/category/{category}/transactions-between"
             params = {
@@ -137,19 +136,16 @@ class Account:
             all_data.extend(data["feedItems"])
         return sorted(all_data, key=lambda x: str(x["transactionTime"]))
 
-    def transactions(self, since: date, display: bool = False) -> list[Transaction]:
+    def transactions(self, since: dt.date, display: bool = False) -> list[Transaction]:
         tr = self.get_transaction_data(since)
-        txns = []
+        txns: list[Transaction] = []
         for i, item in enumerate(tr):
             if self.verbose:
                 log(item)
-            if (
-                item["source"] == "INTERNAL_TRANSFER"
-                or item["status"] not in VALID_STATUS
-            ):
+            if item["source"] == "INTERNAL_TRANSFER" or item["status"] not in VALID_STATUS:
                 continue
 
-            date = parse_date_liberally(item["transactionTime"])
+            date = dateutil.parser.parse(item["transactionTime"].date)
             payee = item.get("counterPartyName", "FIXME")
             ref = " ".join(item["reference"].split())
             amt = Decimal(item["amount"]["minorUnits"]) / 100
@@ -171,8 +167,8 @@ class Account:
                 flag=FLAG_OKAY,
                 payee=payee,
                 narration=ref,
-                tags=set(),
-                links=set(),
+                tags=frozenset(),
+                links=frozenset(),
                 postings=[p1],
             )
             txns.append(txn)
@@ -190,8 +186,8 @@ def extract(
     config_path: Path,
     acc: str,
     token_path: Path,
-    since: date,
-) -> list[Union[Transaction, Balance, Note]]:
+    since: dt.date,
+) -> list[Transaction | Balance | Note]:
     """bean-extract entrypoint"""
     account = Account(config_path=config_path, acc=acc, token_path=token_path)
     txns = account.transactions(since)
@@ -204,7 +200,7 @@ def main(
     config_path: Path,
     acc: str,
     token_path: Path,
-    since: Optional[str] = None,
+    since: str | None = None,
     balance: bool = False,
     verbose: bool = False,
 ) -> None:
@@ -213,14 +209,12 @@ def main(
         echo("Need to provide a 'since' date for transactions")
         return
 
-    account = Account(
-        config_path=config_path, acc=acc, token_path=token_path, verbose=verbose
-    )
+    account = Account(config_path=config_path, acc=acc, token_path=token_path, verbose=verbose)
     if balance:
         account.balance(display=True)
     else:
         assert since is not None
-        since_dt = date.fromisoformat(since)
+        since_dt = dt.date.fromisoformat(since)
         account.transactions(since_dt, display=True)
 
 

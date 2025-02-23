@@ -11,7 +11,7 @@ name = "starling-beancount"
 description = "Import Starling Bank transactions in Beancount"
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 authors = [
     {name = "Chris Arderne", email="chris@rdrn.me"},
@@ -27,10 +27,11 @@ classifiers = [
 ]
 
 dependencies = [
-    "beancount",
-    "httpx",
-    "PyYAML",
-    "typer[all]>=0.7.0",
+    "beancount>=3.1.0",
+    "httpx>=0.28.1",
+    "python-dateutil>=2.9.0.post0",
+    "PyYAML>=6.0.2",
+    "typer>=0.15.0",
 ]
 
 dynamic = ["version"]
@@ -43,40 +44,22 @@ packages = ["starling_beancount"]
 [project.scripts]
 starling = "starling_beancount.extractor:cli"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "black",
-    "build",
-    "flake8",
-    "isort",
-    "mypy",
-    "pre-commit",
-    "pytest",
-    "pytest-cov",
-    "setuptools-scm",
+    "pyright>=1.1.391",
+    "ruff>=0.8.5",
     "twine",
 ]
 
 [project.urls]
 homepage = "https://github.com/carderne/starling-beancount"
 
-[tool.black]
-line-length = 88
-include = '\.pyi?$'
-exclude = ".git,.hg,.mypy_cache,.tox,.venv,_build,buck-out,build,dist"
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+strict = ["**/*.py"]
+pythonVersion = "3.10"
 
-[tool.mypy]
-show_error_codes = true
-show_error_context = true
-show_traceback = true
-disallow_untyped_defs = true
-disallow_any_unimported = true
-no_implicit_optional = true
-check_untyped_defs = true
-warn_return_any = true
-warn_unused_ignores = true
-warn_unreachable = true
-
-[tool.isort]
-profile = "black"
-skip = ".tox,.eggs,ci/templates,build,dist"
+[tool.ruff]
+target-version = "py310"
+line-length = 120
