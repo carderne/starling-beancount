@@ -47,22 +47,23 @@ class StarlingImporter(Importer):  # type: ignore
         self.bean_path = bean_path
         self.lag = lag
 
+    @property
     def name(self) -> str:
         return self.account_name
 
     def identify(self, filepath: str) -> bool:
         return self.acc in filepath
 
-    def extract(self, filepath: str, existing_entries: Any = None) -> list[Transaction | Balance | Note]:
+    def extract(self, filepath: str, existing: Any = None) -> list[Transaction | Balance | Note]:
         since = last_date(self.bean_path, self.account_name) - timedelta(days=self.lag)
         res = extractor.extract(self.config_path, self.acc, self.token_path, since)
         return res
 
-    def file_account(self, filepath: str):
+    def account(self, filepath: str):
         return self.account_name
 
-    def file_name(self, filepath: str):
+    def filename(self, filepath: str):
         return None
 
-    def file_date(self, filepath: str):
+    def date(self, filepath: str):
         return None
