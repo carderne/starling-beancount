@@ -44,13 +44,6 @@ packages = ["starling_beancount"]
 [project.scripts]
 starling = "starling_beancount.extractor:cli"
 
-[dependency-groups]
-dev = [
-    "pyright>=1.1.391",
-    "ruff>=0.8.5",
-    "twine",
-]
-
 [project.urls]
 homepage = "https://github.com/carderne/starling-beancount"
 
@@ -63,3 +56,9 @@ pythonVersion = "3.10"
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.394",
+    "ruff>=0.9.7",
+]

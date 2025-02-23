@@ -1,6 +1,5 @@
-from _typeshed import SupportsWrite
 import textwrap
-from typing import Sequence
+from typing import Sequence, TextIO
 
 import dateutil.parser
 from beancount.core.data import Balance, Note, Transaction
@@ -13,7 +12,7 @@ def parse_date_liberally(string: str):
     return dateutil.parser.parse(string).date()
 
 
-def print_extracted_entries(entries: Sequence[Transaction | Balance | Note], file: SupportsWrite[str]):
+def print_extracted_entries(entries: Sequence[Transaction | Balance | Note], file: TextIO):
     print("", file=file)
 
     for entry in entries:

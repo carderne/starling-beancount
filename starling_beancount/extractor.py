@@ -145,7 +145,7 @@ class Account:
             if item["source"] == "INTERNAL_TRANSFER" or item["status"] not in VALID_STATUS:
                 continue
 
-            date = dateutil.parser.parse(item["transactionTime"].date)
+            date = dateutil.parser.parse(item["transactionTime"]).date()
             payee = item.get("counterPartyName", "FIXME")
             ref = " ".join(item["reference"].split())
             amt = Decimal(item["amount"]["minorUnits"]) / 100
